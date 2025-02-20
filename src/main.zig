@@ -1,3 +1,8 @@
+// TODO: Implement a parser to parse grammar
+// TODO: Handle '\' to split commands on multiple line
+// TODO: Define grammar better
+// TODO: Tab Completion
+// TODO: Think about Tokenizer implementation in regards to sentinel value (null byte or not???)
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const T = std.builtin.Type;
@@ -147,11 +152,15 @@ fn launchCommand(args: []?[*:0]const u8) !CmdReturnStatus {
     return return_status;
 }
 
+/// Read a line in the buffer until the first '\n' character is found.
+/// Returns the number of bytes read.
 fn readLine(input: []u8) !?usize {
     const in = std.io.getStdIn().reader();
     return if (try in.readUntilDelimiterOrEof(input, '\n')) |buf| buf.len else null;
 }
 
+/// Splits the line into separate 0 terminated chunks.
+/// TODO: delete this after parser implementation
 fn splitLineHeap(line: [:0]const u8, allocator: Allocator) ![]?[*:0]const u8 {
     var tokenizer = std.mem.tokenizeAny(u8, line, " \t\r\n");
     var number_of_tokens: usize = 0;
