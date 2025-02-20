@@ -1,10 +1,13 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const T = std.builtin.Type;
+const Tokenizer = @import("tokenizer.zig").Tokenizer;
 
 pub const std_options = std.Options{
     .log_level = .err,
 };
+
+const INPUT_MAX_LEN = 4096;
 
 const CmdReturnStatus = enum {
     success,
@@ -20,8 +23,9 @@ const builtin_names = [_][]const u8{
 
 const builtins = [_]*const fn ([]?[*:0]const u8) CmdReturnStatus{ &cd, &help, &exit };
 
+// TODO: implement that empty cd changes to user home
 fn cd(args: []?[*:0]const u8) CmdReturnStatus {
-    if (args.len < 2) return CmdReturnStatus.fail;
+    if (args.len < 2 or args[1] == null) return CmdReturnStatus.fail;
 
     var return_status: CmdReturnStatus = .success;
 
@@ -67,7 +71,7 @@ pub fn main() !void {
 fn zishLoop() !void {
     std.log.info("Start\n", .{});
     const out = std.io.getStdOut().writer();
-    var input: [4096]u8 = undefined;
+    var input: [INPUT_MAX_LEN:0]u8 = undefined;
 
     while (true) {
         var dir_buf: [128]u8 = undefined;
@@ -79,8 +83,20 @@ fn zishLoop() !void {
 
         try out.print("{s} > ", .{cwd[relative_dir_start_idx..]});
 
-        if (try readLine(&input)) |command| {
+        if (try readLine(input[0 .. INPUT_MAX_LEN - 1])) |bytes_read| {
+            // Zero terminate the buffer
+            input[bytes_read] = 0;
+            const command: [:0]const u8 = input[0..bytes_read :0];
+
             std.log.debug("command: {s}\n", .{command});
+
+            var tokenizer = Tokenizer.init(command);
+            while (true) {
+                const next = tokenizer.next();
+                if (next.t_type == .end) break;
+                std.log.debug("{any}\n", .{next});
+                std.log.debug("{s}\n", .{command[next.start..next.end]});
+            }
             var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
             const allocator = arena.allocator();
             defer {
@@ -88,6 +104,7 @@ fn zishLoop() !void {
                 arena.deinit();
             }
             const tokens = try splitLineHeap(command, allocator);
+
             switch (try executeCommand(tokens)) {
                 .success => {}, //noop
                 .fail => {}, // TODO: do some cool error handling
@@ -130,12 +147,12 @@ fn launchCommand(args: []?[*:0]const u8) !CmdReturnStatus {
     return return_status;
 }
 
-fn readLine(input: []u8) !?[]u8 {
+fn readLine(input: []u8) !?usize {
     const in = std.io.getStdIn().reader();
-    return in.readUntilDelimiterOrEof(input, '\n');
+    return if (try in.readUntilDelimiterOrEof(input, '\n')) |buf| buf.len else null;
 }
 
-fn splitLineHeap(line: []u8, allocator: Allocator) ![]?[*:0]const u8 {
+fn splitLineHeap(line: [:0]const u8, allocator: Allocator) ![]?[*:0]const u8 {
     var tokenizer = std.mem.tokenizeAny(u8, line, " \t\r\n");
     var number_of_tokens: usize = 0;
     var capacity: usize = 8;
