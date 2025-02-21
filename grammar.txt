@@ -1,0 +1,40 @@
+arg_list:
+      arg_list WORD
+    | /* empty */
+    ;
+
+cmd_and_args:
+      WORD arg_list
+    ;
+
+pipe_list:
+      pipe_list PIPE cmd_and_args
+    | cmd_and_args
+    ;
+
+io_modifier:
+      GREATER Word
+    | GREATERGREATER Word
+    | GREATERAMPERSAND Word
+    | GREATERGREATERAMPERSAND Word
+    | LESS Word
+    ;
+
+io_modifier_list:
+      io_modifier_list io_modifier
+    | /* empty */
+    ;
+
+background_optional:
+      AMPERSAND
+    | /* empty */
+    ;
+
+command_line:
+      pipel_list io_modifier_list background_opt END
+    | END /* accept empty cmd line */
+    | error END /* error recovery */
+
+command_list:
+    commant_list command_line
+    ; /* command loop */
